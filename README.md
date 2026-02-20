@@ -1,4 +1,10 @@
-# Coffee-with-Cinema: AI Storyboard & Script Generator (Flask + Ollama)
+# CineForge AI Studio — AI Storyboard & Script Generator
+
+CineForge AI Studio is a cinematic AI workspace that turns a single story idea into a full pre-production package: a properly formatted screenplay, rich character profiles, and a scene-by-scene sound design plan. It is built for hackathon demos, investor-ready presentations, and fast creative iteration while keeping everything local and private.
+
+---
+
+## Tech Stack (Flask + Ollama)
 
 Flask backend that generates:
 - Screenplay

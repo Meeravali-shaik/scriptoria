@@ -47,6 +47,10 @@
     landingView: $('#landingView'),
     dashboardView: $('#dashboardView'),
 
+    sidebar: $('.sidebar'),
+    sidebarBackdrop: $('#sidebarBackdrop'),
+    sidebarToggle: $('#sidebarToggle'),
+
     openUsernameModalBtn: $('#openUsernameModalBtn'),
     closeUsernameModalBtn: $('#closeUsernameModalBtn'),
 
@@ -126,10 +130,17 @@
   function setGreeting(username) {
     const safeName = (username || '').trim();
     if (safeName) {
-      els.greeting.textContent = `Welcome, ${safeName}. Let’s create something amazing.`;
+      els.greeting.textContent = `Welcome, ${safeName}. Let's create something amazing.`;
     } else {
-      els.greeting.textContent = 'Welcome. Let’s create something amazing.';
+      els.greeting.textContent = 'Welcome. Let\'s create something amazing.';
     }
+  }
+
+  function setSidebarOpen(isOpen) {
+    els.sidebar?.classList.toggle('sidebar--open', isOpen);
+    els.sidebarBackdrop?.classList.toggle('is-hidden', !isOpen);
+    document.body.classList.toggle('sidebar-open', isOpen);
+    els.sidebarBackdrop?.setAttribute('aria-hidden', String(!isOpen));
   }
 
   /**
@@ -159,6 +170,8 @@
     if (pageKey === 'characters') setGlobalStatus('Character profiles ready.');
     if (pageKey === 'sound') setGlobalStatus('Sound design plan ready.');
     if (pageKey === 'story') setGlobalStatus('');
+
+    setSidebarOpen(false);
   }
 
   function setSidebarEnabled(enabled) {
@@ -227,6 +240,64 @@
     return String(value);
   }
 
+  function escapeHtml(value) {
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function formatScreenplayText(raw) {
+    const text = (raw || '').replace(/\r\n/g, '\n');
+    const lines = text.split('\n');
+    let previousType = '';
+
+    return lines.map((line) => {
+      const trimmed = line.trim();
+      const safe = escapeHtml(line);
+
+      if (!trimmed) {
+        previousType = '';
+        return '';
+      }
+
+      const isScene = /^\s*(INT\.|EXT\.|EST\.|INT\/EXT\.|I\/E\.)/i.test(trimmed);
+      const isTransition = /TO:$|FADE OUT\.?$|FADE IN\.?$|CUT TO:$/i.test(trimmed);
+      const isCharacter = /^[A-Z0-9 ()'".\-]+$/.test(trimmed) && trimmed.length <= 30 && !isScene && !isTransition;
+      const isParenthetical = /^\(.*\)$/.test(trimmed);
+
+      if (isScene) {
+        previousType = 'scene';
+        return `<span class="screenplay__line screenplay__scene">${safe}</span>`;
+      }
+
+      if (isTransition) {
+        previousType = 'transition';
+        return `<span class="screenplay__line screenplay__transition">${safe}</span>`;
+      }
+
+      if (isCharacter) {
+        previousType = 'character';
+        return `<span class="screenplay__line screenplay__character">${safe}</span>`;
+      }
+
+      if (isParenthetical) {
+        previousType = 'parenthetical';
+        return `<span class="screenplay__line screenplay__parenthetical">${safe}</span>`;
+      }
+
+      if (['character', 'parenthetical', 'dialogue'].includes(previousType)) {
+        previousType = 'dialogue';
+        return `<span class="screenplay__line screenplay__dialogue">${safe}</span>`;
+      }
+
+      previousType = 'action';
+      return `<span class="screenplay__line screenplay__action">${safe}</span>`;
+    }).join('\n');
+  }
+
   /**
    * Renderers — tolerate multiple backend shapes.
    */
@@ -245,7 +316,7 @@
 
     const fallback = screenplay || coerceToText(payload);
     appState.generated.screenplay = fallback;
-    els.screenplayOutput.textContent = fallback;
+    els.screenplayOutput.innerHTML = formatScreenplayText(fallback);
   }
 
   function splitCharacters(rawText) {
@@ -362,13 +433,68 @@
     h.className = 'card__title';
     h.textContent = title;
 
-    const body = document.createElement('div');
-    body.className = 'card__body';
-    body.textContent = bodyText;
+    const divider = document.createElement('div');
+    divider.className = 'card__divider';
 
     card.appendChild(h);
+    card.appendChild(divider);
+
+    const sections = extractCharacterSections(bodyText);
+    if (sections && sections.length) {
+      sections.forEach((section) => card.appendChild(section));
+      return card;
+    }
+
+    const body = document.createElement('div');
+    body.className = 'card__section-body';
+    body.textContent = bodyText;
     card.appendChild(body);
     return card;
+  }
+
+  function extractCharacterSections(text) {
+    const raw = (text || '').trim();
+    if (!raw) return null;
+
+    const target = ['Background', 'Motivation', 'Conflict', 'Arc'];
+    const sections = new Map(target.map((label) => [label, []]));
+    let current = null;
+
+    raw.split(/\n/).forEach((line) => {
+      const match = line.match(/^\s*(Background|Motivation|Conflict|Arc)\s*:\s*(.*)$/i);
+      if (match) {
+        current = target.find((label) => label.toLowerCase() === match[1].toLowerCase()) || match[1];
+        sections.set(current, [match[2] || '']);
+        return;
+      }
+
+      if (current) {
+        sections.get(current)?.push(line.trim());
+      }
+    });
+
+    const blocks = [];
+    for (const label of target) {
+      const content = (sections.get(label) || []).join(' ').trim();
+      if (!content) continue;
+
+      const wrapper = document.createElement('div');
+      wrapper.className = 'card__section';
+
+      const title = document.createElement('div');
+      title.className = 'card__section-title';
+      title.textContent = label;
+
+      const body = document.createElement('div');
+      body.className = 'card__section-body';
+      body.textContent = content;
+
+      wrapper.appendChild(title);
+      wrapper.appendChild(body);
+      blocks.push(wrapper);
+    }
+
+    return blocks.length ? blocks : null;
   }
 
   function buildSoundSection(heading, content) {
@@ -593,7 +719,7 @@
     const dispo = response.headers.get('content-disposition') || '';
     const match = dispo.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i);
     const raw = match ? (match[1] || match[2]) : '';
-    const safe = raw ? decodeURIComponent(raw) : `coffee-with-cinema.${fmt}`;
+    const safe = raw ? decodeURIComponent(raw) : `cineforge-ai-studio.${fmt}`;
     return safe;
   }
 
@@ -606,6 +732,19 @@
   }
 
   function wireEvents() {
+    els.sidebarToggle?.addEventListener('click', () => {
+      const isOpen = els.sidebar?.classList.contains('sidebar--open');
+      setSidebarOpen(!isOpen);
+    });
+
+    els.sidebarBackdrop?.addEventListener('click', () => {
+      setSidebarOpen(false);
+    });
+
+    window.addEventListener('resize', () => {
+      if (window.innerWidth > 980) setSidebarOpen(false);
+    });
+
     // Landing → modal
     els.openUsernameModalBtn.addEventListener('click', () => {
       showInlineError(els.usernameError, '');
