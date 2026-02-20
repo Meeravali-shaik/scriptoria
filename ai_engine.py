@@ -273,6 +273,7 @@ def detect_genre_and_tone(
     story_idea: str,
     *,
     temperature: float = 0.2,
+    language: str = "English",
     client: Optional[GeminiClient] = None,
 ) -> GenreToneAnalysis:
     """Detect genre, tone, and setting.
@@ -286,7 +287,7 @@ def detect_genre_and_tone(
     story_idea = validate_story_input(story_idea)
     client = client or GeminiClient()
 
-    prompt = _build_genre_detection_prompt(story_idea)
+    prompt = _build_genre_detection_prompt(story_idea, language=language)
     raw = client.generate_text(prompt=prompt, temperature=temperature, max_output_tokens=512)
 
     data = _parse_json_object(raw)
@@ -310,6 +311,7 @@ def generate_screenplay(
     analysis: Optional[GenreToneAnalysis] = None,
     *,
     temperature: float = DEFAULT_TEMPERATURE,
+    language: str = "English",
     client: Optional[GeminiClient] = None,
 ) -> str:
     """Generate an industry-formatted screenplay.
@@ -331,7 +333,7 @@ def generate_screenplay(
     story_idea = validate_story_input(story_idea)
     client = client or GeminiClient()
 
-    prompt = _build_screenplay_prompt(story_idea, analysis)
+    prompt = _build_screenplay_prompt(story_idea, analysis, language=language)
     text = client.generate_text(prompt=prompt, temperature=temperature, max_output_tokens=8192)
 
     return _strip_code_fences(text)
@@ -346,6 +348,7 @@ def generate_character_profiles(
     analysis: Optional[GenreToneAnalysis] = None,
     *,
     temperature: float = DEFAULT_TEMPERATURE,
+    language: str = "English",
     client: Optional[GeminiClient] = None,
 ) -> str:
     """Generate detailed character profiles with strict sections.
@@ -360,7 +363,7 @@ def generate_character_profiles(
     story_idea = validate_story_input(story_idea)
     client = client or GeminiClient()
 
-    prompt = _build_character_prompt(story_idea, analysis)
+    prompt = _build_character_prompt(story_idea, analysis, language=language)
     text = client.generate_text(prompt=prompt, temperature=temperature, max_output_tokens=4096)
 
     return _strip_code_fences(text)
@@ -375,6 +378,7 @@ def generate_sound_design_plan(
     analysis: Optional[GenreToneAnalysis] = None,
     *,
     temperature: float = DEFAULT_TEMPERATURE,
+    language: str = "English",
     client: Optional[GeminiClient] = None,
 ) -> str:
     """Generate a scene-wise sound design plan.
@@ -389,7 +393,7 @@ def generate_sound_design_plan(
     story_idea = validate_story_input(story_idea)
     client = client or GeminiClient()
 
-    prompt = _build_sound_design_prompt(story_idea, analysis)
+    prompt = _build_sound_design_prompt(story_idea, analysis, language=language)
     text = client.generate_text(prompt=prompt, temperature=temperature, max_output_tokens=4096)
 
     return _strip_code_fences(text)
@@ -404,6 +408,7 @@ def run_full_pipeline(
     *,
     temperature: float = DEFAULT_TEMPERATURE,
     min_story_chars: int = DEFAULT_MIN_STORY_CHARS,
+    language: str = "English",
     client: Optional[GeminiClient] = None,
 ) -> Dict[str, Any]:
     """Run the complete AI pipeline.
@@ -452,22 +457,45 @@ def run_full_pipeline(
 
     # Genre/tone detection is intentionally low-temperature.
     try:
-        analysis = detect_genre_and_tone(story_idea, temperature=0.2, client=client)
+        analysis = detect_genre_and_tone(
+            story_idea,
+            temperature=0.2,
+            language=language,
+            client=client,
+        )
     except Exception as exc:
         errors.append(f"Genre detection failed: {exc}")
 
     try:
-        screenplay = generate_screenplay(story_idea, analysis, temperature=temperature, client=client)
+        screenplay = generate_screenplay(
+            story_idea,
+            analysis,
+            temperature=temperature,
+            language=language,
+            client=client,
+        )
     except Exception as exc:
         errors.append(f"Screenplay generation failed: {exc}")
 
     try:
-        characters = generate_character_profiles(story_idea, analysis, temperature=temperature, client=client)
+        characters = generate_character_profiles(
+            story_idea,
+            analysis,
+            temperature=temperature,
+            language=language,
+            client=client,
+        )
     except Exception as exc:
         errors.append(f"Character generation failed: {exc}")
 
     try:
-        sound_design = generate_sound_design_plan(story_idea, analysis, temperature=temperature, client=client)
+        sound_design = generate_sound_design_plan(
+            story_idea,
+            analysis,
+            temperature=temperature,
+            language=language,
+            client=client,
+        )
     except Exception as exc:
         errors.append(f"Sound design generation failed: {exc}")
 
@@ -489,6 +517,7 @@ def run_full_pipeline(
             "model": MODEL_NAME,
             "temperature": _clamp_temperature(temperature),
             "min_story_chars": int(min_story_chars),
+            "language": _normalize_language_tag(language),
         },
     }
 
@@ -498,6 +527,7 @@ def run_full_pipeline_single_call(
     *,
     temperature: float = DEFAULT_TEMPERATURE,
     min_story_chars: int = DEFAULT_MIN_STORY_CHARS,
+    language: str = "English",
     client: Optional[GeminiClient] = None,
 ) -> Dict[str, Any]:
     """Run the complete pipeline in a single model request."""
@@ -519,7 +549,7 @@ def run_full_pipeline_single_call(
 
     client = client or GeminiClient()
 
-    prompt = _build_single_call_prompt(story_idea)
+    prompt = _build_single_call_prompt(story_idea, language=language)
     raw = client.generate_text(
         prompt=prompt,
         temperature=_clamp_temperature(temperature),
@@ -546,6 +576,7 @@ def run_full_pipeline_single_call(
             "temperature": _clamp_temperature(temperature),
             "min_story_chars": int(min_story_chars),
             "mode": "single_call",
+            "language": _normalize_language_tag(language),
         },
     }
 
@@ -554,7 +585,8 @@ def run_full_pipeline_single_call(
 # Prompt builders
 # -----------------------------
 
-def _build_genre_detection_prompt(story_idea: str) -> str:
+def _build_genre_detection_prompt(story_idea: str, *, language: str = "English") -> str:
+    lang = _normalize_language_tag(language)
     return (
         "You are a film development analyst.\n"
         "Task: Identify the likely GENRE, TONE, and SETTING of the story idea.\n"
@@ -562,13 +594,19 @@ def _build_genre_detection_prompt(story_idea: str) -> str:
         "- Output MUST be valid JSON only (no markdown, no commentary, no code fences).\n"
         "- JSON keys must be exactly: genre, tone, setting\n"
         "- Values must be short strings (1–6 words each).\n"
+        f"- Write values in {lang}. Keep JSON keys in English.\n"
         "\n"
         "Return JSON now for this story idea:\n"
         f"{story_idea}\n"
     )
 
 
-def _build_screenplay_prompt(story_idea: str, analysis: Optional[GenreToneAnalysis]) -> str:
+def _build_screenplay_prompt(
+    story_idea: str,
+    analysis: Optional[GenreToneAnalysis],
+    *,
+    language: str = "English",
+) -> str:
     analysis_block = ""
     if analysis:
         analysis_block = (
@@ -577,9 +615,13 @@ def _build_screenplay_prompt(story_idea: str, analysis: Optional[GenreToneAnalys
             f"Setting: {analysis.setting}\n"
         )
 
+    lang = _normalize_language_tag(language)
+
     return (
         "You are a professional screenwriter.\n"
         "Write an industry-formatted SCREENPLAY based on the story idea.\n"
+        "\n"
+        f"Language: Write the entire screenplay in {lang}. Maintain all spacing rules in that language.\n"
         "\n"
         "STRICT WGA FORMAT RULES (MUST FOLLOW):\n"
         "1) NO MARKDOWN. Output plain text only.\n"
@@ -604,7 +646,12 @@ def _build_screenplay_prompt(story_idea: str, analysis: Optional[GenreToneAnalys
     )
 
 
-def _build_character_prompt(story_idea: str, analysis: Optional[GenreToneAnalysis]) -> str:
+def _build_character_prompt(
+    story_idea: str,
+    analysis: Optional[GenreToneAnalysis],
+    *,
+    language: str = "English",
+) -> str:
     analysis_block = ""
     if analysis:
         analysis_block = (
@@ -613,9 +660,13 @@ def _build_character_prompt(story_idea: str, analysis: Optional[GenreToneAnalysi
             f"Setting: {analysis.setting}\n"
         )
 
+    lang = _normalize_language_tag(language)
+
     return (
         "You are a character development specialist for film/TV.\n"
         "Generate DETAILED CHARACTER PROFILES derived from the story idea.\n"
+        "\n"
+        f"Language: Write all character content in {lang}. Labels remain as specified.\n"
         "\n"
         "STRICT OUTPUT RULES:\n"
         "- NO MARKDOWN. Plain text only.\n"
@@ -641,7 +692,12 @@ def _build_character_prompt(story_idea: str, analysis: Optional[GenreToneAnalysi
     )
 
 
-def _build_sound_design_prompt(story_idea: str, analysis: Optional[GenreToneAnalysis]) -> str:
+def _build_sound_design_prompt(
+    story_idea: str,
+    analysis: Optional[GenreToneAnalysis],
+    *,
+    language: str = "English",
+) -> str:
     analysis_block = ""
     if analysis:
         analysis_block = (
@@ -650,9 +706,13 @@ def _build_sound_design_prompt(story_idea: str, analysis: Optional[GenreToneAnal
             f"Setting: {analysis.setting}\n"
         )
 
+    lang = _normalize_language_tag(language)
+
     return (
         "You are a film sound designer and re-recording mixer.\n"
         "Create a SCENE-BASED SOUND DESIGN PLAN for the story idea.\n"
+        "\n"
+        f"Language: Write all sections in {lang}. Keep labels exactly as specified.\n"
         "\n"
         "STRICT OUTPUT RULES:\n"
         "- NO MARKDOWN. Plain text only.\n"
@@ -676,7 +736,8 @@ def _build_sound_design_prompt(story_idea: str, analysis: Optional[GenreToneAnal
     )
 
 
-def _build_single_call_prompt(story_idea: str) -> str:
+def _build_single_call_prompt(story_idea: str, *, language: str = "English") -> str:
+    lang = _normalize_language_tag(language)
     return (
         "You are a professional screenwriter and film development team.\n"
         "Generate ALL outputs in ONE response using the exact markers below.\n"
@@ -684,6 +745,7 @@ def _build_single_call_prompt(story_idea: str) -> str:
         "- NO markdown. Plain text only.\n"
         "- Use the markers EXACTLY as shown (each marker on its own line).\n"
         "- Do not add extra sections, headers, or commentary.\n"
+        f"- Write all content in {lang}. Keep the marker labels in English.\n"
         "\n"
         "First output 3 single-line fields:\n"
         "GENRE: <1-6 words>\n"
@@ -706,6 +768,30 @@ def _build_single_call_prompt(story_idea: str) -> str:
 # -----------------------------
 # Utilities
 # -----------------------------
+
+def _normalize_language_tag(language: str) -> str:
+    """Normalize a requested language for prompt safety and consistency."""
+
+    lang = str(language or "").replace("\r", " ").replace("\n", " ").strip()
+    if not lang:
+        return "English"
+
+    alias_map = {
+        "en": "English",
+        "hi": "Hindi",
+        "te": "Telugu",
+        "ta": "Tamil",
+        "kn": "Kannada",
+        "ml": "Malayalam",
+    }
+
+    lowered = lang.lower()
+    if lowered in alias_map:
+        return alias_map[lowered]
+
+    # Keep language hints concise to avoid prompt bloat.
+    return lang[:48]
+
 
 def _normalize_newlines(text: str) -> str:
     return text.replace("\r\n", "\n").replace("\r", "\n")
