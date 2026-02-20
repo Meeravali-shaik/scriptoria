@@ -9,6 +9,34 @@ AI runs locally via **Ollama** using the model **`granite4:micro`**.
 
 ---
 
+## Features
+
+### AI generation (local, private)
+- **Local inference via Ollama** (no cloud keys required) using `granite4:micro`.
+- **Genre + tone + setting analysis** returned as structured JSON (`genre_analysis`).
+- **Industry-style screenplay formatting** (scene headings, action, dialogue blocks; plain text output).
+- **Character profiles** with clear sectioning for easy reading.
+- **Sound design plan** (scene-wise cues + ambience + SFX direction).
+- **Two orchestration modes**:
+  - Multi-step pipeline (analysis → screenplay → characters → sound)
+  - Single-call pipeline (`AI_SINGLE_CALL=1` or request `single_call=true`) for faster/cheaper runs
+
+### Backend & UX
+- **REST JSON API** designed for frontend integration.
+- **Session-based persistence** (server-side filesystem sessions) so generated text can be downloaded later.
+- **Download exports**:
+  - `txt` (plain text)
+  - `pdf` (multi-page, wrapped lines)
+  - `docx` (Word-compatible)
+- **Built-in UI** served from `/` (templates + static assets) for quick demos.
+
+### Production-friendly behavior
+- Configurable via environment variables (secret key, ports, CORS, Ollama URL).
+- AI layer kept modular in `ai_engine.py` (client + prompts + parsing).
+- Error handling covers common AI/HTTP failures (timeout, connection issues, HTTP errors, missing model).
+
+---
+
 ## Quick Start (Hackathon Evaluation)
 
 ### 1) Start Ollama + pull the model
