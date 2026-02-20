@@ -46,6 +46,15 @@ def create_app() -> Flask:
     debug_flag = os.getenv("FLASK_DEBUG", "").strip().lower() in {"1", "true", "yes", "on"}
     app.config["DEBUG"] = debug_flag
 
+    gemini_keys = os.getenv("GEMINI_API_KEYS", "").strip() or os.getenv("GEMINI_API_KEY", "").strip()
+    if not gemini_keys:
+        if debug_flag:
+            app.logger.warning(
+                "GEMINI_API_KEYS or GEMINI_API_KEY is not set; AI generation will fail until it is provided."
+            )
+        else:
+            raise RuntimeError("Missing GEMINI_API_KEYS or GEMINI_API_KEY environment variable.")
+
     secret = os.getenv("FLASK_SECRET_KEY", "").strip()
     if not secret:
         if debug_flag:

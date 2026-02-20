@@ -13,825 +13,295 @@
   - State is kept in a single appState object.
 */
 
-(() => {
-  'use strict';
+const landingView = document.getElementById("landingView");
+const dashboardView = document.getElementById("dashboardView");
+const openUsernameModalBtn = document.getElementById("openUsernameModalBtn");
+const closeUsernameModalBtn = document.getElementById("closeUsernameModalBtn");
+const modalBackdrop = document.getElementById("modalBackdrop");
+const usernameForm = document.getElementById("usernameForm");
+const usernameInput = document.getElementById("usernameInput");
+const continueBtn = document.getElementById("continueBtn");
+const usernameError = document.getElementById("usernameError");
 
-  /**
-   * Central state store
-   */
-  const appState = {
-    username: '',
-    storyIdea: '',
-    generated: {
-      screenplay: '',
-      characters: null,
-      soundDesign: null,
-      raw: null,
-    },
-    ui: {
-      currentView: 'landing', // landing | dashboard
-      currentPage: 'story', // story | screenplay | characters | sound
-      isSubmittingUsername: false,
-      isGenerating: false,
-      isDownloading: false,
-    },
-  };
+const sidebar = document.querySelector(".sidebar");
+const sidebarToggle = document.getElementById("sidebarToggle");
+const sidebarBackdrop = document.getElementById("sidebarBackdrop");
 
-  /**
-   * DOM helpers
-   */
-  const $ = (sel, root = document) => root.querySelector(sel);
-  const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+const navItems = document.querySelectorAll(".nav__item");
+const pages = document.querySelectorAll(".page");
 
-  const els = {
-    landingView: $('#landingView'),
-    dashboardView: $('#dashboardView'),
+const storyInput = document.getElementById("storyInput");
+const generateBtn = document.getElementById("generateBtn");
+const generateSpinner = document.getElementById("generateSpinner");
+const storyError = document.getElementById("storyError");
 
-    sidebar: $('.sidebar'),
-    sidebarBackdrop: $('#sidebarBackdrop'),
-    sidebarToggle: $('#sidebarToggle'),
+const screenplayOutput = document.getElementById("screenplayOutput");
+const charactersOutput = document.getElementById("charactersOutput");
+const soundOutput = document.getElementById("soundOutput");
 
-    openUsernameModalBtn: $('#openUsernameModalBtn'),
-    closeUsernameModalBtn: $('#closeUsernameModalBtn'),
+const screenplayError = document.getElementById("screenplayError");
+const charactersError = document.getElementById("charactersError");
+const soundError = document.getElementById("soundError");
 
-    modalBackdrop: $('#modalBackdrop'),
-    usernameForm: $('#usernameForm'),
-    usernameInput: $('#usernameInput'),
-    continueBtn: $('#continueBtn'),
-    usernameError: $('#usernameError'),
+const globalStatus = document.getElementById("globalStatus");
 
-    greeting: $('#greeting'),
-    globalStatus: $('#globalStatus'),
+const downloadButtons = document.querySelectorAll("[data-download]");
+const downloadStatus = document.getElementById("downloadStatus");
 
-    navItems: $$('.nav__item'),
-    pages: $$('.page'),
+let currentUser = "";
+let lastPayload = null;
 
-    storyInput: $('#storyInput'),
-    generateBtn: $('#generateBtn'),
-    generateSpinner: $('#generateSpinner'),
-    storyError: $('#storyError'),
+function show(el) { el.classList.remove("is-hidden"); }
+function hide(el) { el.classList.add("is-hidden"); }
 
-    screenplayOutput: $('#screenplayOutput'),
-    screenplayError: $('#screenplayError'),
-
-    charactersOutput: $('#charactersOutput'),
-    charactersError: $('#charactersError'),
-
-    soundOutput: $('#soundOutput'),
-    soundError: $('#soundError'),
-
-    downloadButtons: $$('[data-download]'),
-    downloadStatus: $('#downloadStatus'),
-  };
-
-  /**
-   * UI messaging
-   */
-  function setGlobalStatus(message) {
-    els.globalStatus.textContent = message || '';
+function setActiveView(isLanding) {
+  if (isLanding) {
+    landingView.classList.add("view--active");
+    landingView.classList.remove("view--hidden");
+    dashboardView.classList.add("view--hidden");
+  } else {
+    landingView.classList.remove("view--active");
+    landingView.classList.add("view--hidden");
+    dashboardView.classList.remove("view--hidden");
   }
+}
 
-  function showInlineError(containerEl, message) {
-    if (!containerEl) return;
-    if (!message) {
-      containerEl.textContent = '';
-      containerEl.classList.add('is-hidden');
-      return;
+function toggleSidebar(open) {
+  if (!sidebar) return;
+  sidebar.classList.toggle("is-open", open);
+  if (sidebarBackdrop) sidebarBackdrop.classList.toggle("is-hidden", !open);
+}
+
+openUsernameModalBtn?.addEventListener("click", () => {
+  hide(usernameError);
+  modalBackdrop?.classList.remove("is-hidden");
+  usernameInput?.focus();
+});
+
+closeUsernameModalBtn?.addEventListener("click", () => {
+  modalBackdrop?.classList.add("is-hidden");
+});
+
+modalBackdrop?.addEventListener("click", (e) => {
+  if (e.target === modalBackdrop) modalBackdrop.classList.add("is-hidden");
+});
+
+usernameInput?.addEventListener("input", () => {
+  continueBtn.disabled = usernameInput.value.trim().length < 2;
+});
+
+usernameForm?.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const val = usernameInput.value.trim();
+  if (val.length < 2) {
+    usernameError.textContent = "Please enter at least 2 characters.";
+    show(usernameError);
+    return;
+  }
+  currentUser = val;
+  modalBackdrop.classList.add("is-hidden");
+  setActiveView(false);
+});
+
+sidebarToggle?.addEventListener("click", () => toggleSidebar(true));
+sidebarBackdrop?.addEventListener("click", () => toggleSidebar(false));
+
+navItems.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    if (btn.classList.contains("is-disabled")) return;
+    const page = btn.dataset.page;
+    navItems.forEach((b) => b.classList.remove("is-active"));
+    btn.classList.add("is-active");
+    pages.forEach((p) => p.classList.toggle("is-active", p.dataset.page === page));
+    toggleSidebar(false);
+  });
+});
+
+function enableNav() {
+  navItems.forEach((btn) => {
+    btn.classList.remove("is-disabled");
+    btn.disabled = false;
+  });
+}
+
+function setActivePage(pageName) {
+  navItems.forEach((b) => b.classList.remove("is-active"));
+  pages.forEach((p) => p.classList.toggle("is-active", p.dataset.page === pageName));
+  const match = Array.from(navItems).find((b) => b.dataset.page === pageName);
+  if (match) match.classList.add("is-active");
+}
+
+function setStatus(message) {
+  if (!globalStatus) return;
+  globalStatus.textContent = message || "";
+}
+
+function safeText(text) {
+  return (text || "").toString();
+}
+
+function formatScreenplay(text) {
+  const lines = safeText(text).split(/\r?\n/);
+  const html = lines.map((line) => {
+    const trimmed = line.trim();
+    if (!trimmed) return `<div class="sp-action">&nbsp;</div>`;
+    const upper = trimmed.toUpperCase();
+
+    if (/^(INT\.|EXT\.|INT\/EXT\.|EST\.)/.test(upper)) {
+      return `<div class="sp-scene">${trimmed}</div>`;
     }
-    containerEl.textContent = message;
-    containerEl.classList.remove('is-hidden');
-  }
-
-  function setModalOpen(isOpen) {
-    els.modalBackdrop.classList.toggle('is-hidden', !isOpen);
-    els.modalBackdrop.setAttribute('aria-hidden', String(!isOpen));
-
-    if (isOpen) {
-      // small delay lets animation feel smoother
-      window.setTimeout(() => {
-        els.usernameInput?.focus();
-      }, 50);
+    if (/(TO:|FADE OUT\.|FADE IN\.|CUT TO:|DISSOLVE TO:)$/.test(upper)) {
+      return `<div class="sp-transition">${trimmed}</div>`;
     }
-  }
-
-  function setView(viewName) {
-    appState.ui.currentView = viewName;
-
-    const isLanding = viewName === 'landing';
-    els.landingView.classList.toggle('view--active', isLanding);
-    els.landingView.classList.toggle('view--hidden', !isLanding);
-
-    els.dashboardView.classList.toggle('view--active', !isLanding);
-    els.dashboardView.classList.toggle('view--hidden', isLanding);
-
-    setGlobalStatus('');
-  }
-
-  function setGreeting(username) {
-    const safeName = (username || '').trim();
-    if (safeName) {
-      els.greeting.textContent = `Welcome, ${safeName}. Let's create something amazing.`;
-    } else {
-      els.greeting.textContent = 'Welcome. Let\'s create something amazing.';
+    if (/^\(.+\)$/.test(trimmed)) {
+      return `<div class="sp-parenthetical">${trimmed}</div>`;
     }
+    if (/^[A-Z0-9 ()'.-]{2,}$/.test(upper) && upper === trimmed) {
+      return `<div class="sp-character">${trimmed}</div>`;
+    }
+    return `<div class="sp-action">${trimmed}</div>`;
+  }).join("");
+  return html;
+}
+
+async function generate() {
+  hide(storyError);
+  hide(screenplayError);
+  hide(charactersError);
+  hide(soundError);
+
+  const story = storyInput.value.trim();
+  if (story.length < 10) {
+    storyError.textContent = "Please provide at least 10 characters.";
+    show(storyError);
+    return;
   }
 
-  function setSidebarOpen(isOpen) {
-    els.sidebar?.classList.toggle('sidebar--open', isOpen);
-    els.sidebarBackdrop?.classList.toggle('is-hidden', !isOpen);
-    document.body.classList.toggle('sidebar-open', isOpen);
-    els.sidebarBackdrop?.setAttribute('aria-hidden', String(!isOpen));
-  }
+  generateBtn.disabled = true;
+  generateSpinner.classList.remove("is-hidden");
+  setStatus("Analyzing your story...");
 
-  /**
-   * Sidebar / Page routing (client-side)
-   */
-  function setActivePage(pageKey) {
-    appState.ui.currentPage = pageKey;
-
-    els.navItems.forEach((btn) => {
-      const isMatch = btn.dataset.page === pageKey;
-      btn.classList.toggle('is-active', isMatch);
+  try {
+    setStatus("Generating screenplay and production notes...");
+    const res = await fetch("/generate_content", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ story, username: currentUser })
     });
 
-    els.pages.forEach((page) => {
-      const isMatch = page.dataset.page === pageKey;
-      page.classList.toggle('is-active', isMatch);
-    });
+    if (!res.ok) throw new Error("Generation failed.");
 
-    // Clear page-specific errors when switching
-    showInlineError(els.storyError, '');
-    showInlineError(els.screenplayError, '');
-    showInlineError(els.charactersError, '');
-    showInlineError(els.soundError, '');
+    const data = await res.json();
+    lastPayload = data;
 
-    // Friendly status hint
-    if (pageKey === 'screenplay') setGlobalStatus('Screenplay ready.');
-    if (pageKey === 'characters') setGlobalStatus('Character profiles ready.');
-    if (pageKey === 'sound') setGlobalStatus('Sound design plan ready.');
-    if (pageKey === 'story') setGlobalStatus('');
+    screenplayOutput.innerHTML = formatScreenplay(data.screenplay || data.script || "");
+    charactersOutput.innerHTML = (data.characters_html || data.characters || "")
+      ? renderCharacters(data.characters_html || data.characters)
+      : "";
+    soundOutput.innerHTML = (data.sound_design_html || data.sound_design || "")
+      ? renderSound(data.sound_design_html || data.sound_design)
+      : "";
 
-    setSidebarOpen(false);
+    enableNav();
+    setActivePage("screenplay");
+    setStatus("Generation complete. Showing screenplay.");
+  } catch (err) {
+    storyError.textContent = err.message || "Something went wrong.";
+    show(storyError);
+    setStatus("Generation failed. Please try again.");
+  } finally {
+    generateSpinner.classList.add("is-hidden");
+    generateBtn.disabled = false;
+    setTimeout(() => setStatus(""), 2200);
+  }
+}
+
+function renderCharacters(payload) {
+  if (Array.isArray(payload)) {
+    return payload.map((c) => `
+      <div class="card">
+        <h4 class="card__title">${safeText(c.name)}</h4>
+        <div class="card__divider"></div>
+        <div class="card__section"><strong>Background:</strong> ${safeText(c.background)}</div>
+        <div class="card__section"><strong>Motivation:</strong> ${safeText(c.motivation)}</div>
+        <div class="card__section"><strong>Conflict:</strong> ${safeText(c.conflict)}</div>
+        <div class="card__section"><strong>Arc:</strong> ${safeText(c.arc)}</div>
+      </div>
+    `).join("");
+  }
+  return `<div class="card"><div class="card__section">${safeText(payload)}</div></div>`;
+}
+
+function renderSound(payload) {
+  if (Array.isArray(payload)) {
+    return payload.map((s) => `
+      <div class="sound__item">
+        <div class="sound__title">${safeText(s.scene)}</div>
+        <div class="sound__body">${safeText(s.details || s.plan || "")}</div>
+      </div>
+    `).join("");
+  }
+  const raw = safeText(payload).trim();
+  if (!raw) return "";
+
+  const blocks = raw
+    .split(/(?=SCENE\s*\d+:)/i)
+    .map((b) => b.trim())
+    .filter(Boolean);
+
+  const formatBody = (text) => safeText(text).replace(/\r?\n/g, "<br>");
+
+  if (blocks.length <= 1) {
+    return `
+      <div class="sound__item">
+        <div class="sound__title">Sound Design</div>
+        <div class="sound__body">${formatBody(raw)}</div>
+      </div>
+    `;
   }
 
-  function setSidebarEnabled(enabled) {
-    els.navItems.forEach((btn) => {
-      const page = btn.dataset.page;
-      if (page === 'story') return;
-      btn.disabled = !enabled;
-      btn.classList.toggle('is-disabled', !enabled);
-    });
-  }
-
-  /**
-   * Fetch helpers
-   */
-  async function safeJson(response) {
-    try {
-      return await response.json();
-    } catch {
-      return null;
-    }
-  }
-
-  async function postJson(url, body) {
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json, text/plain, */*',
-      },
-      body: JSON.stringify(body ?? {}),
-      credentials: 'same-origin',
-    });
-
-    if (!resp.ok) {
-      const data = await safeJson(resp);
-      const msg = (data && (data.error || data.message)) ? (data.error || data.message) : `Request failed (${resp.status})`;
-      throw new Error(msg);
-    }
-
-    const contentType = resp.headers.get('content-type') || '';
-    if (contentType.includes('application/json')) {
-      return resp.json();
-    }
-
-    // If backend returns plain text JSON-less, still attempt to parse
-    const text = await resp.text();
-    try {
-      return JSON.parse(text);
-    } catch {
-      return { ok: true, data: text };
-    }
-  }
-
-  function coerceToText(value) {
-    if (value == null) return '';
-    if (typeof value === 'string') return value;
-    if (Array.isArray(value)) return value.map(coerceToText).join('\n\n');
-    if (typeof value === 'object') {
-      // Prefer common payload keys if present
-      const preferredKeys = ['screenplay', 'script', 'content', 'text', 'result', 'output'];
-      for (const key of preferredKeys) {
-        if (typeof value[key] === 'string') return value[key];
-      }
-      return JSON.stringify(value, null, 2);
-    }
-    return String(value);
-  }
-
-  function escapeHtml(value) {
-    return String(value)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
-
-  function formatScreenplayText(raw) {
-    const text = (raw || '').replace(/\r\n/g, '\n');
-    const lines = text.split('\n');
-    let previousType = '';
-
-    return lines.map((line) => {
-      const trimmed = line.trim();
-      const safe = escapeHtml(line);
-
-      if (!trimmed) {
-        previousType = '';
-        return '';
-      }
-
-      const isScene = /^\s*(INT\.|EXT\.|EST\.|INT\/EXT\.|I\/E\.)/i.test(trimmed);
-      const isTransition = /TO:$|FADE OUT\.?$|FADE IN\.?$|CUT TO:$/i.test(trimmed);
-      const isCharacter = /^[A-Z0-9 ()'".\-]+$/.test(trimmed) && trimmed.length <= 30 && !isScene && !isTransition;
-      const isParenthetical = /^\(.*\)$/.test(trimmed);
-
-      if (isScene) {
-        previousType = 'scene';
-        return `<span class="screenplay__line screenplay__scene">${safe}</span>`;
-      }
-
-      if (isTransition) {
-        previousType = 'transition';
-        return `<span class="screenplay__line screenplay__transition">${safe}</span>`;
-      }
-
-      if (isCharacter) {
-        previousType = 'character';
-        return `<span class="screenplay__line screenplay__character">${safe}</span>`;
-      }
-
-      if (isParenthetical) {
-        previousType = 'parenthetical';
-        return `<span class="screenplay__line screenplay__parenthetical">${safe}</span>`;
-      }
-
-      if (['character', 'parenthetical', 'dialogue'].includes(previousType)) {
-        previousType = 'dialogue';
-        return `<span class="screenplay__line screenplay__dialogue">${safe}</span>`;
-      }
-
-      previousType = 'action';
-      return `<span class="screenplay__line screenplay__action">${safe}</span>`;
-    }).join('\n');
-  }
-
-  /**
-   * Renderers — tolerate multiple backend shapes.
-   */
-  function renderScreenplay(payload) {
-    // Common shapes:
-    // - {screenplay: "..."}
-    // - {data: {screenplay: "..."}}
-    // - {result: {screenplay: "..."}}
-    // - {screenplay_text: "..."}
-    const screenplay =
-      (payload && typeof payload.screenplay === 'string' && payload.screenplay) ||
-      (payload && typeof payload.screenplay_text === 'string' && payload.screenplay_text) ||
-      (payload && payload.data && typeof payload.data.screenplay === 'string' && payload.data.screenplay) ||
-      (payload && payload.result && typeof payload.result.screenplay === 'string' && payload.result.screenplay) ||
-      '';
-
-    const fallback = screenplay || coerceToText(payload);
-    appState.generated.screenplay = fallback;
-    els.screenplayOutput.innerHTML = formatScreenplayText(fallback);
-  }
-
-  function splitCharacters(rawText) {
-    // Attempt to split character blocks in plain text outputs.
-    // Heuristic: two or more newlines start a new block.
-    const text = (rawText || '').trim();
-    if (!text) return [];
-    return text.split(/\n\s*\n+/g).map((s) => s.trim()).filter(Boolean);
-  }
-
-  function renderCharacters(payload) {
-    // Common shapes:
-    // - {characters: "..."}
-    // - {characters: [ {name, description}, ... ] }
-    // - {character_profiles: "..."}
-    // - {data: {characters: ...}}
-
-    const root = payload?.data ?? payload?.result ?? payload;
-    let characters = root?.characters ?? root?.character_profiles ?? root?.characterProfiles ?? null;
-
-    els.charactersOutput.innerHTML = '';
-
-    if (Array.isArray(characters)) {
-      characters.forEach((ch, idx) => {
-        const name = (ch && (ch.name || ch.character || ch.title)) ? (ch.name || ch.character || ch.title) : `Character ${idx + 1}`;
-        const body = ch && (ch.profile || ch.description || ch.details || ch.bio) ? (ch.profile || ch.description || ch.details || ch.bio) : coerceToText(ch);
-        els.charactersOutput.appendChild(buildCharacterCard(name, body));
-      });
-      appState.generated.characters = characters;
-      return;
-    }
-
-    // If it's a string, split into blocks
-    if (typeof characters === 'string') {
-      const blocks = splitCharacters(characters);
-      blocks.forEach((block, idx) => {
-        const firstLine = block.split(/\n/)[0]?.trim() || `Character ${idx + 1}`;
-        els.charactersOutput.appendChild(buildCharacterCard(firstLine, block));
-      });
-      appState.generated.characters = blocks;
-      return;
-    }
-
-    // Fallback: coerce payload
-    const text = coerceToText(root);
-    const blocks = splitCharacters(text);
-    if (blocks.length) {
-      blocks.forEach((block, idx) => {
-        const firstLine = block.split(/\n/)[0]?.trim() || `Character ${idx + 1}`;
-        els.charactersOutput.appendChild(buildCharacterCard(firstLine, block));
-      });
-      appState.generated.characters = blocks;
-      return;
-    }
-
-    appState.generated.characters = null;
-    els.charactersOutput.appendChild(buildCharacterCard('Characters', 'No character data returned.'));
-  }
-
-  function renderSoundDesign(payload) {
-    // Common shapes:
-    // - {sound_design: "..."}
-    // - {soundDesign: "..."}
-    // - {sound_design_plan: [ {scene, ambience, foley, music}, ... ] }
-    const root = payload?.data ?? payload?.result ?? payload;
-    const sound = root?.sound_design ?? root?.soundDesign ?? root?.sound_design_plan ?? root?.soundDesignPlan ?? null;
-
-    els.soundOutput.innerHTML = '';
-
-    if (Array.isArray(sound)) {
-      sound.forEach((sceneObj, idx) => {
-        const heading = (sceneObj && (sceneObj.scene || sceneObj.title || sceneObj.heading)) ? (sceneObj.scene || sceneObj.title || sceneObj.heading) : `Scene ${idx + 1}`;
-        els.soundOutput.appendChild(buildSoundSection(heading, sceneObj));
-      });
-      appState.generated.soundDesign = sound;
-      return;
-    }
-
-    if (typeof sound === 'string') {
-      // Split by scene markers if present; fallback to blocks.
-      const text = sound.trim();
-      const blocks = text.includes('Scene')
-        ? text.split(/\n(?=\s*Scene\s*\d+\b)/g)
-        : text.split(/\n\s*\n+/g);
-
-      blocks.map((b) => b.trim()).filter(Boolean).forEach((block, idx) => {
-        const firstLine = block.split(/\n/)[0]?.trim() || `Scene ${idx + 1}`;
-        els.soundOutput.appendChild(buildSoundSection(firstLine, block));
-      });
-      appState.generated.soundDesign = blocks;
-      return;
-    }
-
-    const text = coerceToText(root);
-    if (text.trim()) {
-      const blocks = text.split(/\n\s*\n+/g).map((b) => b.trim()).filter(Boolean);
-      blocks.forEach((block, idx) => {
-        const firstLine = block.split(/\n/)[0]?.trim() || `Scene ${idx + 1}`;
-        els.soundOutput.appendChild(buildSoundSection(firstLine, block));
-      });
-      appState.generated.soundDesign = blocks;
-      return;
-    }
-
-    appState.generated.soundDesign = null;
-    els.soundOutput.appendChild(buildSoundSection('Sound Design', 'No sound design data returned.'));
-  }
-
-  function buildCharacterCard(title, bodyText) {
-    const card = document.createElement('article');
-    card.className = 'card';
-
-    const h = document.createElement('h4');
-    h.className = 'card__title';
-    h.textContent = title;
-
-    const divider = document.createElement('div');
-    divider.className = 'card__divider';
-
-    card.appendChild(h);
-    card.appendChild(divider);
-
-    const sections = extractCharacterSections(bodyText);
-    if (sections && sections.length) {
-      sections.forEach((section) => card.appendChild(section));
-      return card;
-    }
-
-    const body = document.createElement('div');
-    body.className = 'card__section-body';
-    body.textContent = bodyText;
-    card.appendChild(body);
-    return card;
-  }
-
-  function extractCharacterSections(text) {
-    const raw = (text || '').trim();
-    if (!raw) return null;
-
-    const target = ['Background', 'Motivation', 'Conflict', 'Arc'];
-    const sections = new Map(target.map((label) => [label, []]));
-    let current = null;
-
-    raw.split(/\n/).forEach((line) => {
-      const match = line.match(/^\s*(Background|Motivation|Conflict|Arc)\s*:\s*(.*)$/i);
-      if (match) {
-        current = target.find((label) => label.toLowerCase() === match[1].toLowerCase()) || match[1];
-        sections.set(current, [match[2] || '']);
-        return;
-      }
-
-      if (current) {
-        sections.get(current)?.push(line.trim());
-      }
-    });
-
-    const blocks = [];
-    for (const label of target) {
-      const content = (sections.get(label) || []).join(' ').trim();
-      if (!content) continue;
-
-      const wrapper = document.createElement('div');
-      wrapper.className = 'card__section';
-
-      const title = document.createElement('div');
-      title.className = 'card__section-title';
-      title.textContent = label;
-
-      const body = document.createElement('div');
-      body.className = 'card__section-body';
-      body.textContent = content;
-
-      wrapper.appendChild(title);
-      wrapper.appendChild(body);
-      blocks.push(wrapper);
-    }
-
-    return blocks.length ? blocks : null;
-  }
-
-  function buildSoundSection(heading, content) {
-    const section = document.createElement('section');
-    section.className = 'sound__section';
-
-    const h = document.createElement('h4');
-    h.className = 'sound__heading';
-    h.textContent = heading;
-
-    const body = document.createElement('div');
-    body.className = 'sound__content';
-
-    if (typeof content === 'string') {
-      body.textContent = content;
-    } else {
-      // Render object with bold keys, per spec
-      body.appendChild(renderKeyValueBlock(content));
-    }
-
-    section.appendChild(h);
-    section.appendChild(body);
-    return section;
-  }
-
-  function renderKeyValueBlock(obj) {
-    const wrapper = document.createElement('div');
-
-    if (!obj || typeof obj !== 'object') {
-      wrapper.textContent = coerceToText(obj);
-      return wrapper;
-    }
-
-    const entries = Object.entries(obj);
-    if (!entries.length) {
-      wrapper.textContent = 'No details available.';
-      return wrapper;
-    }
-
-    for (const [key, value] of entries) {
-      const line = document.createElement('div');
-      const label = document.createElement('strong');
-      label.textContent = `${humanizeKey(key)}: `;
-
-      const text = document.createElement('span');
-      text.textContent = coerceToText(value);
-
-      line.appendChild(label);
-      line.appendChild(text);
-      wrapper.appendChild(line);
-    }
-
-    return wrapper;
-  }
-
-  function humanizeKey(key) {
-    return String(key)
-      .replace(/_/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .replace(/\b\w/g, (m) => m.toUpperCase());
-  }
-
-  /**
-   * Business actions
-   */
-  async function submitUsername(username) {
-    if (appState.ui.isSubmittingUsername) return;
-
-    const trimmed = (username || '').trim();
-    if (!trimmed) return;
-
-    appState.ui.isSubmittingUsername = true;
-    showInlineError(els.usernameError, '');
-    setGlobalStatus('');
-
-    els.continueBtn.disabled = true;
+  return blocks.map((block) => {
+    const lines = block.split(/\r?\n/);
+    const firstLine = lines[0] || "Sound Design";
+    const body = lines.slice(1).join("\n").trim() || block;
+    return `
+      <div class="sound__item">
+        <div class="sound__title">${safeText(firstLine)}</div>
+        <div class="sound__body">${formatBody(body)}</div>
+      </div>
+    `;
+  }).join("");
+}
+
+generateBtn?.addEventListener("click", generate);
+
+downloadButtons.forEach((btn) => {
+  btn.addEventListener("click", async () => {
+    const format = btn.dataset.download;
+    const type = btn.dataset.downloadType || "screenplay";
+    if (!lastPayload) return;
 
     try {
-      // Backend expects JSON body. Key name is unknown; send both common variants.
-      await postJson('/set_username', { username: trimmed });
-
-      appState.username = trimmed;
-      setGreeting(trimmed);
-      setModalOpen(false);
-
-      // Redirect to dashboard (client-side)
-      setView('dashboard');
-      setActivePage('story');
-
-      // Ensure initial state of sidebar
-      setSidebarEnabled(false);
-
-      // Focus the story input for a smooth flow
-      window.setTimeout(() => {
-        els.storyInput?.focus();
-      }, 80);
-    } catch (err) {
-      showInlineError(els.usernameError, err?.message || 'Failed to set username.');
-      els.continueBtn.disabled = false;
-    } finally {
-      appState.ui.isSubmittingUsername = false;
-      updateContinueButtonState();
-    }
-  }
-
-  function setGeneratingUI(isGenerating) {
-    appState.ui.isGenerating = isGenerating;
-    els.generateBtn.disabled = isGenerating;
-    els.generateSpinner.classList.toggle('is-hidden', !isGenerating);
-
-    if (isGenerating) {
-      els.generateBtn.dataset.prevLabel = els.generateBtn.textContent || '';
-      els.generateBtn.textContent = 'Generating...';
-    } else {
-      els.generateBtn.textContent = els.generateBtn.dataset.prevLabel || 'Generate Content';
-    }
-  }
-
-  async function generateContent() {
-    if (appState.ui.isGenerating) return;
-
-    const story = (els.storyInput.value || '').trim();
-    if (!story) {
-      showInlineError(els.storyError, 'Please enter your story idea before generating.');
-      return;
-    }
-
-    showInlineError(els.storyError, '');
-    setGlobalStatus('Generating content...');
-
-    appState.storyIdea = story;
-    setGeneratingUI(true);
-
-    try {
-      // Backend payload key is not specified; send common variants.
-      const payload = {
-        story: story,
-        story_idea: story,
-        prompt: story,
-      };
-
-      const data = await postJson('/generate_content', payload);
-
-      appState.generated.raw = data;
-
-      // If backend returns partial results with errors, show them but continue rendering.
-      if (data && data.ok === false && Array.isArray(data.errors) && data.errors.length) {
-        showInlineError(els.storyError, data.errors.join('\n'));
-      }
-
-      // Render all pages now; then enable sidebar items.
-      renderScreenplay(data);
-      renderCharacters(data);
-      renderSoundDesign(data);
-
-      setSidebarEnabled(true);
-      setGlobalStatus('Generation complete.');
-
-      // Navigate to Screenplay page
-      setActivePage('screenplay');
-    } catch (err) {
-      showInlineError(els.storyError, err?.message || 'Failed to generate content.');
-      setGlobalStatus('');
-    } finally {
-      setGeneratingUI(false);
-    }
-  }
-
-  async function downloadFormat(formatType) {
-    if (appState.ui.isDownloading) return;
-
-    const fmt = String(formatType || '').toLowerCase();
-    if (!['txt', 'pdf', 'docx'].includes(fmt)) return;
-
-    els.downloadStatus.textContent = 'Preparing download...';
-    appState.ui.isDownloading = true;
-
-    // Disable buttons to prevent duplicates
-    els.downloadButtons.forEach((b) => b.disabled = true);
-
-    try {
-      const resp = await fetch(`/download/${encodeURIComponent(fmt)}`, {
-        method: 'POST',
-        headers: { 'Accept': '*/*' },
-        credentials: 'same-origin',
+      downloadStatus.textContent = "Preparing file...";
+      const res = await fetch(`/download/${format}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ format, type, payload: lastPayload })
       });
-
-      if (!resp.ok) {
-        const data = await safeJson(resp);
-        const msg = (data && (data.error || data.message)) ? (data.error || data.message) : `Download failed (${resp.status})`;
-        throw new Error(msg);
-      }
-
-      const blob = await resp.blob();
-      const filename = inferFilename(resp, fmt);
-
-      // Trigger file download
+      if (!res.ok) throw new Error("Download failed.");
+      const blob = await res.blob();
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
-      a.download = filename;
+      a.download = `${type}.${format}`;
       document.body.appendChild(a);
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-
-      els.downloadStatus.textContent = 'Download started.';
+      downloadStatus.textContent = "Download ready.";
+      setTimeout(() => (downloadStatus.textContent = ""), 1200);
     } catch (err) {
-      els.downloadStatus.textContent = '';
-      showInlineError(els.screenplayError, err?.message || 'Unable to download file.');
-    } finally {
-      appState.ui.isDownloading = false;
-      els.downloadButtons.forEach((b) => b.disabled = false);
-      window.setTimeout(() => {
-        els.downloadStatus.textContent = '';
-      }, 1400);
+      downloadStatus.textContent = err.message || "Download error.";
     }
-  }
-
-  function inferFilename(response, fmt) {
-    const dispo = response.headers.get('content-disposition') || '';
-    const match = dispo.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i);
-    const raw = match ? (match[1] || match[2]) : '';
-    const safe = raw ? decodeURIComponent(raw) : `cineforge-ai-studio.${fmt}`;
-    return safe;
-  }
-
-  /**
-   * Input / interaction wiring
-   */
-  function updateContinueButtonState() {
-    const hasText = Boolean((els.usernameInput.value || '').trim());
-    els.continueBtn.disabled = !hasText || appState.ui.isSubmittingUsername;
-  }
-
-  function wireEvents() {
-    els.sidebarToggle?.addEventListener('click', () => {
-      const isOpen = els.sidebar?.classList.contains('sidebar--open');
-      setSidebarOpen(!isOpen);
-    });
-
-    els.sidebarBackdrop?.addEventListener('click', () => {
-      setSidebarOpen(false);
-    });
-
-    window.addEventListener('resize', () => {
-      if (window.innerWidth > 980) setSidebarOpen(false);
-    });
-
-    // Landing → modal
-    els.openUsernameModalBtn.addEventListener('click', () => {
-      showInlineError(els.usernameError, '');
-      els.usernameInput.value = '';
-      updateContinueButtonState();
-      setModalOpen(true);
-    });
-
-    // Close modal
-    els.closeUsernameModalBtn.addEventListener('click', () => {
-      if (!appState.ui.isSubmittingUsername) setModalOpen(false);
-    });
-
-    // Click outside modal closes it
-    els.modalBackdrop.addEventListener('click', (e) => {
-      if (e.target === els.modalBackdrop && !appState.ui.isSubmittingUsername) {
-        setModalOpen(false);
-      }
-    });
-
-    // ESC closes modal
-    window.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && !els.modalBackdrop.classList.contains('is-hidden')) {
-        if (!appState.ui.isSubmittingUsername) setModalOpen(false);
-      }
-    });
-
-    // Enable continue button once text entered
-    els.usernameInput.addEventListener('input', () => {
-      showInlineError(els.usernameError, '');
-      updateContinueButtonState();
-    });
-
-    // Submit username
-    els.usernameForm.addEventListener('submit', (e) => {
-      e.preventDefault();
-      submitUsername(els.usernameInput.value);
-    });
-
-    // Sidebar navigation
-    els.navItems.forEach((btn) => {
-      btn.addEventListener('click', () => {
-        if (btn.disabled || btn.classList.contains('is-disabled')) return;
-        const page = btn.dataset.page;
-        if (!page) return;
-        setActivePage(page);
-      });
-    });
-
-    // Generate
-    els.generateBtn.addEventListener('click', generateContent);
-
-    // Download
-    els.downloadButtons.forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const fmt = btn.dataset.download;
-        downloadFormat(fmt);
-      });
-    });
-
-    // Polite: clear screenplay error when navigating away/back
-    els.storyInput.addEventListener('input', () => {
-      showInlineError(els.storyError, '');
-    });
-  }
-
-  /**
-   * Boot
-   */
-  function init() {
-    // Initial state per spec:
-    // - Landing view active
-    // - Modal closed
-    // - Dashboard hidden
-    // - Sidebar other pages disabled
-    setView('landing');
-    setModalOpen(false);
-    setSidebarEnabled(false);
-    setActivePage('story');
-    setGreeting('');
-
-    wireEvents();
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
-  }
-})();
+  });
+});

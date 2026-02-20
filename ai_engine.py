@@ -1,11 +1,11 @@
 """Coffee-with-Cinema: AI Storyboard & Script Generator — AI/ML Module
 
 This module is intentionally backend-agnostic.
-It provides a structured generation pipeline using a local Ollama server.
+It provides a structured generation pipeline using the Gemini API.
 
 Requirements:
-    - Environment variable (optional): OLLAMA_BASE_URL (default: http://localhost:11434)
-    - Local Ollama model: granite4:micro
+    - Environment variable: GEMINI_API_KEY
+    - Optional: GEMINI_MODEL (default: gemini-1.5-flash)
 
 Exports:
     - validate_story_input
@@ -17,7 +17,7 @@ Exports:
         - run_full_pipeline_single_call
 
 Model:
-    - granite4:micro
+    - gemini-1.5-flash (default)
 """
 
 from __future__ import annotations
@@ -26,6 +26,7 @@ import json
 import os
 import re
 from dataclasses import dataclass
+from threading import Lock
 from typing import Any, Dict, Optional
 
 import requests
@@ -36,11 +37,12 @@ from requests.exceptions import RequestException
 from requests.exceptions import Timeout as RequestsTimeout
 
 
-MODEL_NAME = "granite4:micro"
+MODEL_NAME = "gemini-2.5-flash"
 DEFAULT_TEMPERATURE = 0.7
 DEFAULT_MIN_STORY_CHARS = 120
-DEFAULT_NUM_PREDICT = 2500
+DEFAULT_MAX_OUTPUT_TOKENS = 2500
 DEFAULT_TIMEOUT_SECONDS = 120
+GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 
 
 class AIEngineError(RuntimeError):
@@ -56,42 +58,58 @@ class GenreToneAnalysis:
     setting: str
 
 
-class OllamaClient:
-    """Thin wrapper around the local Ollama HTTP API."""
+class GeminiClient:
+    """Thin wrapper around the Gemini REST API."""
+
+    _rr_lock = Lock()
+    _rr_index = 0
 
     def __init__(
         self,
         *,
-        base_url: Optional[str] = None,
+        api_key: Optional[str] = None,
         model: str = MODEL_NAME,
         timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
-        num_predict: int = DEFAULT_NUM_PREDICT,
+        max_output_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS,
     ) -> None:
-        base = (base_url or os.getenv("OLLAMA_BASE_URL", "") or "http://localhost:11434").strip()
-        if not base:
-            base = "http://localhost:11434"
+        if api_key:
+            raw_keys = api_key
+        else:
+            raw_keys = os.getenv("GEMINI_API_KEYS", "").strip() or os.getenv("GEMINI_API_KEY", "").strip()
 
-        self._base_url = base.rstrip("/")
-        self._model = (model or MODEL_NAME).strip() or MODEL_NAME
+        self._api_keys = [k.strip() for k in raw_keys.split(",") if k.strip()]
+        env_model = os.getenv("GEMINI_MODEL", "").strip()
+        self._model = (model or env_model or MODEL_NAME).strip() or MODEL_NAME
         self._timeout_seconds = int(timeout_seconds)
-        self._num_predict = int(num_predict)
+        self._max_output_tokens = int(max_output_tokens)
 
     @property
-    def base_url(self) -> str:
-        return str(self._base_url)
+    def api_key(self) -> str:
+        return str(self._api_keys[0]) if self._api_keys else ""
 
     @property
     def model(self) -> str:
         return str(self._model)
 
-    def _endpoint(self) -> str:
-        return f"{self._base_url}/api/generate"
+    def _endpoint(self, api_key: str) -> str:
+        return f"{GEMINI_API_BASE}/{self._model}:generateContent?key={api_key}"
+
+    def _select_api_key(self) -> str:
+        if not self._api_keys:
+            return ""
+        if len(self._api_keys) == 1:
+            return self._api_keys[0]
+
+        with self._rr_lock:
+            idx = self._rr_index % len(self._api_keys)
+            self.__class__._rr_index += 1
+        return self._api_keys[idx]
 
     def _extract_error_message(self, resp: Response) -> str:
         try:
             data = resp.json()
-            if isinstance(data, dict):
-                err = data.get("error")
+            if isinstance(data, dict) and isinstance(data.get("error"), dict):
+                err = data.get("error", {}).get("message")
                 if err:
                     return str(err).strip()
         except Exception:
@@ -107,7 +125,7 @@ class OllamaClient:
         retries: int = 2,
         timeout_hint_seconds: float = 30.0,
     ) -> str:
-        """Generate text using Ollama.
+        """Generate text using Gemini.
 
         Args:
             prompt: Fully composed prompt (no markdown expected).
@@ -123,18 +141,23 @@ class OllamaClient:
             AIEngineError: On API, transport, or parsing errors.
         """
 
-        temperature = _clamp_temperature(temperature)
-        url = self._endpoint()
+        api_key = self._select_api_key()
+        if not api_key:
+            raise AIEngineError("Missing GEMINI_API_KEYS or GEMINI_API_KEY environment variable.")
 
-        # NOTE: max_output_tokens is accepted for API compatibility with the previous client.
-        # Ollama uses `num_predict`; per backend requirements we keep this at a fixed default.
+        temperature = _clamp_temperature(temperature)
+        url = self._endpoint(api_key)
+
         payload = {
-            "model": self._model,
-            "prompt": str(prompt or ""),
-            "stream": False,
-            "options": {
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [{"text": str(prompt or "")}],
+                }
+            ],
+            "generationConfig": {
                 "temperature": float(temperature),
-                "num_predict": int(self._num_predict),
+                "maxOutputTokens": int(max_output_tokens or self._max_output_tokens),
             },
         }
 
@@ -145,16 +168,13 @@ class OllamaClient:
             try:
                 resp = requests.post(url, json=payload, timeout=self._timeout_seconds)
             except RequestsConnectionError as exc:
-                raise AIEngineError(
-                    f"Ollama connection refused or unreachable at {self._base_url}. "
-                    "Start Ollama and ensure it listens on 11434."
-                ) from exc
+                raise AIEngineError("Gemini connection failed. Check your network.") from exc
             except RequestsTimeout as exc:
                 raise AIEngineError(
-                    f"Ollama request timed out after {self._timeout_seconds}s."
+                    f"Gemini request timed out after {self._timeout_seconds}s."
                 ) from exc
             except RequestException as exc:
-                raise AIEngineError(f"Ollama request failed: {exc}") from exc
+                raise AIEngineError(f"Gemini request failed: {exc}") from exc
 
             try:
                 resp.raise_for_status()
@@ -162,41 +182,48 @@ class OllamaClient:
                 msg = self._extract_error_message(resp)
                 lower = msg.lower()
                 if "not found" in lower and ("model" in lower or self._model.lower() in lower):
-                    raise AIEngineError(
-                        f"Ollama model '{self._model}' not found. Run: ollama pull {self._model}"
-                    ) from exc
+                    raise AIEngineError(f"Gemini model '{self._model}' not found.") from exc
 
                 # Retry only for server-side errors.
                 if 500 <= int(resp.status_code) < 600 and attempt + 1 < attempts:
                     last_err = exc
                     continue
 
-                raise AIEngineError(f"Ollama HTTP error {resp.status_code}: {msg}") from exc
+                if int(resp.status_code) == 401:
+                    raise AIEngineError("Gemini API key is invalid or missing.") from exc
+
+                raise AIEngineError(f"Gemini HTTP error {resp.status_code}: {msg}") from exc
 
             try:
                 data = resp.json()
             except ValueError as exc:
-                raise AIEngineError("Invalid JSON response from Ollama.") from exc
+                raise AIEngineError("Invalid JSON response from Gemini.") from exc
 
             if not isinstance(data, dict):
-                raise AIEngineError("Invalid JSON response from Ollama (expected object).")
+                raise AIEngineError("Invalid JSON response from Gemini (expected object).")
 
             if data.get("error"):
-                msg = str(data.get("error")).strip()
-                lower = msg.lower()
-                if "not found" in lower and ("model" in lower or self._model.lower() in lower):
-                    raise AIEngineError(
-                        f"Ollama model '{self._model}' not found. Run: ollama pull {self._model}"
-                    )
-                raise AIEngineError(f"Ollama error: {msg}")
+                msg = str(data.get("error"))
+                raise AIEngineError(f"Gemini error: {msg}")
 
-            text = str(data.get("response") or "").strip()
+            candidates = data.get("candidates") or []
+            text = ""
+            if candidates:
+                content = candidates[0].get("content") or {}
+                parts = content.get("parts") or []
+                if parts:
+                    text = str(parts[0].get("text") or "").strip()
+
             if not text:
-                raise AIEngineError("Empty response from Ollama.")
+                feedback = data.get("promptFeedback") or {}
+                block_reason = feedback.get("blockReason")
+                if block_reason:
+                    raise AIEngineError(f"Gemini blocked the response: {block_reason}")
+                raise AIEngineError("Empty response from Gemini.")
 
             return _normalize_newlines(text)
 
-        raise AIEngineError(f"Ollama request failed: {last_err}")
+        raise AIEngineError(f"Gemini request failed: {last_err}")
 
 
 # -----------------------------
@@ -246,7 +273,7 @@ def detect_genre_and_tone(
     story_idea: str,
     *,
     temperature: float = 0.2,
-    client: Optional[OllamaClient] = None,
+    client: Optional[GeminiClient] = None,
 ) -> GenreToneAnalysis:
     """Detect genre, tone, and setting.
 
@@ -257,7 +284,7 @@ def detect_genre_and_tone(
     """
 
     story_idea = validate_story_input(story_idea)
-    client = client or OllamaClient()
+    client = client or GeminiClient()
 
     prompt = _build_genre_detection_prompt(story_idea)
     raw = client.generate_text(prompt=prompt, temperature=temperature, max_output_tokens=512)
@@ -283,7 +310,7 @@ def generate_screenplay(
     analysis: Optional[GenreToneAnalysis] = None,
     *,
     temperature: float = DEFAULT_TEMPERATURE,
-    client: Optional[OllamaClient] = None,
+    client: Optional[GeminiClient] = None,
 ) -> str:
     """Generate an industry-formatted screenplay.
 
@@ -302,7 +329,7 @@ def generate_screenplay(
     """
 
     story_idea = validate_story_input(story_idea)
-    client = client or OllamaClient()
+    client = client or GeminiClient()
 
     prompt = _build_screenplay_prompt(story_idea, analysis)
     text = client.generate_text(prompt=prompt, temperature=temperature, max_output_tokens=8192)
@@ -319,7 +346,7 @@ def generate_character_profiles(
     analysis: Optional[GenreToneAnalysis] = None,
     *,
     temperature: float = DEFAULT_TEMPERATURE,
-    client: Optional[OllamaClient] = None,
+    client: Optional[GeminiClient] = None,
 ) -> str:
     """Generate detailed character profiles with strict sections.
 
@@ -331,7 +358,7 @@ def generate_character_profiles(
     """
 
     story_idea = validate_story_input(story_idea)
-    client = client or OllamaClient()
+    client = client or GeminiClient()
 
     prompt = _build_character_prompt(story_idea, analysis)
     text = client.generate_text(prompt=prompt, temperature=temperature, max_output_tokens=4096)
@@ -348,7 +375,7 @@ def generate_sound_design_plan(
     analysis: Optional[GenreToneAnalysis] = None,
     *,
     temperature: float = DEFAULT_TEMPERATURE,
-    client: Optional[OllamaClient] = None,
+    client: Optional[GeminiClient] = None,
 ) -> str:
     """Generate a scene-wise sound design plan.
 
@@ -360,7 +387,7 @@ def generate_sound_design_plan(
     """
 
     story_idea = validate_story_input(story_idea)
-    client = client or OllamaClient()
+    client = client or GeminiClient()
 
     prompt = _build_sound_design_prompt(story_idea, analysis)
     text = client.generate_text(prompt=prompt, temperature=temperature, max_output_tokens=4096)
@@ -377,7 +404,7 @@ def run_full_pipeline(
     *,
     temperature: float = DEFAULT_TEMPERATURE,
     min_story_chars: int = DEFAULT_MIN_STORY_CHARS,
-    client: Optional[OllamaClient] = None,
+    client: Optional[GeminiClient] = None,
 ) -> Dict[str, Any]:
     """Run the complete AI pipeline.
 
@@ -387,7 +414,7 @@ def run_full_pipeline(
         story_idea: User story concept.
         temperature: Optional temperature for generative steps (screenplay/characters/sound).
         min_story_chars: Minimum story length.
-        client: Optional shared OllamaClient instance.
+        client: Optional shared GeminiClient instance.
 
     Returns:
         {
@@ -416,7 +443,7 @@ def run_full_pipeline(
             "meta": {"model": MODEL_NAME},
         }
 
-    client = client or OllamaClient()
+    client = client or GeminiClient()
 
     analysis: Optional[GenreToneAnalysis] = None
     screenplay = ""
@@ -471,7 +498,7 @@ def run_full_pipeline_single_call(
     *,
     temperature: float = DEFAULT_TEMPERATURE,
     min_story_chars: int = DEFAULT_MIN_STORY_CHARS,
-    client: Optional[OllamaClient] = None,
+    client: Optional[GeminiClient] = None,
 ) -> Dict[str, Any]:
     """Run the complete pipeline in a single model request."""
 
@@ -490,7 +517,7 @@ def run_full_pipeline_single_call(
             "meta": {"model": MODEL_NAME, "mode": "single_call"},
         }
 
-    client = client or OllamaClient()
+    client = client or GeminiClient()
 
     prompt = _build_single_call_prompt(story_idea)
     raw = client.generate_text(
@@ -554,17 +581,18 @@ def _build_screenplay_prompt(story_idea: str, analysis: Optional[GenreToneAnalys
         "You are a professional screenwriter.\n"
         "Write an industry-formatted SCREENPLAY based on the story idea.\n"
         "\n"
-        "STRICT FORMAT RULES (MUST FOLLOW):\n"
+        "STRICT WGA FORMAT RULES (MUST FOLLOW):\n"
         "1) NO MARKDOWN. Output plain text only.\n"
         "2) Scene headings MUST be in ALL CAPS and start with INT. or EXT.\n"
         "   Example: INT. ABANDONED THEATRE - NIGHT\n"
         "3) Use standard screenplay blocks: ACTION, CHARACTER, DIALOGUE, PARENTHETICAL, TRANSITIONS.\n"
-        "4) CHARACTER NAMES MUST BE UPPERCASE and centered using indentation: 20 leading spaces.\n"
-        "   Example line: '                    ALEX'\n"
-        "5) Dialogue lines should be indented 12 spaces.\n"
-        "6) Parentheticals should be indented 10 spaces and wrapped in parentheses.\n"
-        "7) Keep spacing readable and consistent. Preserve line breaks.\n"
-        "8) Do not include any explanations, outlines, or bullet lists. Only the screenplay.\n"
+        "4) CHARACTER NAMES MUST BE UPPERCASE and indented 22 spaces.\n"
+        "   Example line: '                      ALEX'\n"
+        "5) Dialogue lines should be indented 15 spaces.\n"
+        "6) Parentheticals should be indented 18 spaces and wrapped in parentheses.\n"
+        "7) Transitions (e.g., CUT TO:) should be right-aligned, uppercase.\n"
+        "8) Keep spacing readable and consistent. Preserve line breaks.\n"
+        "9) Do not include any explanations, outlines, or bullet lists. Only the screenplay.\n"
         "\n"
         "CONTEXT (use as guidance, not as extra output):\n"
         f"{analysis_block}"

@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="color-scheme" content="dark" />
-  <title>CineForge AI Studio — AI Storyboard & Script Generator</title>
-  <meta name="description" content="CineForge AI Studio: AI Storyboard & Script Generator — Craft. Direct. Create. Turn story ideas into screenplays, character profiles, and sound design plans." />
+  <meta name="color-scheme" content="light" />
+  <title>CineVerse AI Studio</title>
+  <meta name="description" content="CineVerse AI Studio: Direct Intelligence. A premium AI studio for screenplay, character, and sound design generation." />
 
   <link rel="stylesheet" href="/static/style.css" />
   <script src="/static/script.js" defer></script>
@@ -13,58 +13,55 @@
 
 <body>
   <noscript>
-    <div class="noscript">
-      This app requires JavaScript enabled to run.
-    </div>
+    <div class="noscript">This app requires JavaScript enabled to run.</div>
   </noscript>
 
   <div id="app" class="app">
-    <!-- Landing Page -->
+    <!-- Landing -->
     <section id="landingView" class="view view--active" aria-label="Landing">
       <div class="hero">
         <div class="hero__content">
-          <div class="hero__bg" aria-hidden="true"></div>
-          <p class="hero__kicker">CineForge AI Studio</p>
-          <h1 class="hero__title">AI Storyboard &amp; Script Generator</h1>
-          <p class="hero__subtitle">Craft. Direct. Create.</p>
-
+          <div class="hero__eyebrow">CineVerse AI Studio</div>
+          <h1 class="hero__title">Direct Intelligence.</h1>
+          <p class="hero__subtitle">A modern AI production suite for screenplay, characters, and sound design.</p>
           <div class="hero__actions">
-            <button id="openUsernameModalBtn" class="btn btn--primary" type="button">
-              Enter the Studio
-            </button>
+            <button id="openUsernameModalBtn" class="btn btn--primary" type="button">Enter the Studio</button>
+            <button class="btn btn--ghost" type="button">View Demo</button>
           </div>
-
-          <p class="hero__hint">A cinematic AI studio for scripts, characters, and sound design in one flow.</p>
+          <div class="hero__features" aria-label="Key features">
+            <div class="feature">
+              <div class="feature__title">Studio-grade scripts</div>
+              <div class="feature__desc">WGA-aligned formatting with cinematic pacing.</div>
+            </div>
+            <div class="feature">
+              <div class="feature__title">Character intelligence</div>
+              <div class="feature__desc">Casting-ready profiles with arcs and motivation.</div>
+            </div>
+            <div class="feature">
+              <div class="feature__title">Sound lab planning</div>
+              <div class="feature__desc">Scene-based mixes with Foley and score notes.</div>
+            </div>
+          </div>
         </div>
       </div>
+      <div class="hero__divider" aria-hidden="true"></div>
     </section>
 
     <!-- Username Modal -->
     <div id="modalBackdrop" class="modal-backdrop is-hidden" aria-hidden="true">
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" aria-describedby="modalDesc">
-        <div class="modal__glow" aria-hidden="true"></div>
-
         <div class="modal__header">
           <h2 id="modalTitle" class="modal__title">Enter your username</h2>
-          <button id="closeUsernameModalBtn" class="icon-btn" type="button" aria-label="Close">
-            <span aria-hidden="true">×</span>
-          </button>
+          <button id="closeUsernameModalBtn" class="icon-btn" type="button" aria-label="Close">×</button>
         </div>
-
-        <p id="modalDesc" class="modal__desc">We’ll personalize your studio dashboard.</p>
-
+        <p id="modalDesc" class="modal__desc">Your personalized production console awaits.</p>
         <form id="usernameForm" class="modal__form" autocomplete="off">
           <label class="field">
             <span class="field__label">Username</span>
             <input id="usernameInput" class="field__input" type="text" name="username" placeholder="e.g., meera" maxlength="40" required />
           </label>
-
           <div id="usernameError" class="inline-alert is-hidden" role="status" aria-live="polite"></div>
-
-          <button id="continueBtn" class="btn btn--primary btn--block" type="submit" disabled>
-            Continue
-          </button>
-
+          <button id="continueBtn" class="btn btn--primary btn--block" type="submit" disabled>Enter Console</button>
           <p class="modal__fineprint">By continuing, you start a new creative session.</p>
         </form>
       </div>
@@ -76,20 +73,24 @@
         <div class="sidebar__brand">
           <div class="brandmark" aria-hidden="true"></div>
           <div class="brandtext">
-            <div class="brandtext__name">CineForge AI Studio</div>
-            <div class="brandtext__tag">Cinematic Console</div>
+            <div class="brandtext__name">CineVerse AI Studio</div>
+            <div class="brandtext__tag">Premium White Minimal SaaS</div>
           </div>
         </div>
+        <div class="sidebar__divider"></div>
 
         <nav class="nav" aria-label="Sections">
           <button class="nav__item is-active" type="button" data-page="story">
             <span class="nav__icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" role="presentation">
-                <path d="M4 20h4l10-10a2 2 0 0 0-4-4L4 16v4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
-                <path d="M13 7l4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                <circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="1.6" />
+                <circle cx="12" cy="12" r="1.8" fill="currentColor" />
+                <circle cx="7" cy="12" r="1" fill="currentColor" />
+                <circle cx="17" cy="12" r="1" fill="currentColor" />
+                <path d="M12 5v2M12 17v2M5 12h2M17 12h2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" />
               </svg>
             </span>
-            <span class="nav__label">Story Line</span>
+            <span class="nav__label">Storyline</span>
           </button>
 
           <button class="nav__item is-disabled" type="button" data-page="screenplay" disabled>
@@ -126,7 +127,7 @@
         </nav>
 
         <div class="sidebar__footer">
-          <div class="chip">Premium • Cinematic • Investor Ready</div>
+          <div class="chip">Studio Console</div>
         </div>
       </aside>
 
@@ -135,36 +136,38 @@
       <section class="content" aria-label="Content">
         <header class="topbar">
           <div class="topbar__left">
-            <button id="sidebarToggle" class="icon-btn icon-btn--ghost topbar__toggle" type="button" aria-label="Toggle navigation">
-              <span aria-hidden="true">☰</span>
-            </button>
-            <h2 id="greeting" class="greeting">Welcome. Let's create something amazing.</h2>
+            <button id="sidebarToggle" class="icon-btn icon-btn--ghost topbar__toggle" type="button" aria-label="Toggle navigation">☰</button>
+            <div>
+              <h2 id="greeting" class="greeting">Welcome. Let's create something cinematic.</h2>
+              <p class="topbar__sub">Production console ready.</p>
+            </div>
           </div>
           <div class="topbar__right">
             <div id="globalStatus" class="global-status" role="status" aria-live="polite"></div>
+            <div class="topbar__badge">Studio Mode</div>
           </div>
         </header>
 
         <section class="pages" aria-label="Pages">
-          <!-- Story Input Page -->
+          <!-- Story Input -->
           <div class="page is-active" data-page="story">
             <div class="panel">
               <div class="panel__header">
-                <h3 class="panel__title">Story Line</h3>
-                <p class="panel__subtitle">Describe your film idea. Be vivid. Be specific.</p>
+                <div class="panel__heading">
+                  <div class="panel__label">Production Console</div>
+                  <h3 class="panel__title">Storyline</h3>
+                  <p class="panel__subtitle">Describe your film idea with cinematic precision.</p>
+                </div>
               </div>
 
               <div class="panel__body">
                 <label class="field field--textarea">
                   <span class="field__label">Your story idea</span>
-                  <textarea id="storyInput" class="field__textarea" rows="12" placeholder="A lonely projectionist discovers that every reel he plays changes reality..." aria-label="Story idea"></textarea>
+                  <textarea id="storyInput" class="field__textarea" rows="10" placeholder="A visionary director discovers a reel that edits reality with every cut..." aria-label="Story idea"></textarea>
                 </label>
 
                 <div class="actions">
-                  <button id="generateBtn" class="btn btn--primary" type="button">
-                    Generate Content
-                  </button>
-
+                  <button id="generateBtn" class="btn btn--primary" type="button">Generate Production Pack</button>
                   <div id="generateSpinner" class="spinner is-hidden" aria-hidden="true"></div>
                 </div>
 
@@ -173,12 +176,15 @@
             </div>
           </div>
 
-          <!-- Screenplay Page -->
+          <!-- Screenplay -->
           <div class="page" data-page="screenplay">
             <div class="panel">
               <div class="panel__header">
-                <h3 class="panel__title">Screenplay</h3>
-                <p class="panel__subtitle">Industry-style formatting preserved.</p>
+                <div class="panel__heading">
+                  <div class="panel__label">Script Workspace</div>
+                  <h3 class="panel__title">Screenplay</h3>
+                  <p class="panel__subtitle">Professional formatting with cinematic spacing.</p>
+                </div>
               </div>
 
               <div class="panel__body">
@@ -188,7 +194,6 @@
                     <button class="btn btn--ghost" type="button" data-download="pdf">Download PDF</button>
                     <button class="btn btn--ghost" type="button" data-download="docx">Download DOCX</button>
                   </div>
-
                   <div id="downloadStatus" class="toolbar__status" role="status" aria-live="polite"></div>
                 </div>
 
@@ -201,12 +206,22 @@
             </div>
           </div>
 
-          <!-- Character Profiles Page -->
+          <!-- Characters -->
           <div class="page" data-page="characters">
             <div class="panel">
               <div class="panel__header">
-                <h3 class="panel__title">Character Profiles</h3>
-                <p class="panel__subtitle">Clear, readable profiles — separated visually.</p>
+                <div class="panel__heading">
+                  <div class="panel__label">Character Intelligence</div>
+                  <h3 class="panel__title">Character Profiles</h3>
+                  <p class="panel__subtitle">Casting-ready profiles with narrative arcs.</p>
+                </div>
+                <div class="toolbar">
+                  <div class="toolbar__group">
+                    <button class="btn btn--ghost" type="button" data-download="txt" data-download-type="characters">Download TXT</button>
+                    <button class="btn btn--ghost" type="button" data-download="pdf" data-download-type="characters">Download PDF</button>
+                    <button class="btn btn--ghost" type="button" data-download="docx" data-download-type="characters">Download DOCX</button>
+                  </div>
+                </div>
               </div>
 
               <div class="panel__body">
@@ -216,12 +231,22 @@
             </div>
           </div>
 
-          <!-- Sound Design Page -->
+          <!-- Sound Design -->
           <div class="page" data-page="sound">
             <div class="panel">
               <div class="panel__header">
-                <h3 class="panel__title">Sound Design Plan</h3>
-                <p class="panel__subtitle">Scene-wise plan with bold section headings.</p>
+                <div class="panel__heading">
+                  <div class="panel__label">Sound Lab</div>
+                  <h3 class="panel__title">Sound Design</h3>
+                  <p class="panel__subtitle">Timeline-focused mix plans for each scene.</p>
+                </div>
+                <div class="toolbar">
+                  <div class="toolbar__group">
+                    <button class="btn btn--ghost" type="button" data-download="txt" data-download-type="sound_design">Download TXT</button>
+                    <button class="btn btn--ghost" type="button" data-download="pdf" data-download-type="sound_design">Download PDF</button>
+                    <button class="btn btn--ghost" type="button" data-download="docx" data-download-type="sound_design">Download DOCX</button>
+                  </div>
+                </div>
               </div>
 
               <div class="panel__body">
