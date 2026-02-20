@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <title>CineForge AI Studio — AI Storyboard & Script Generator</title>
+  <meta name="description" content="Coffee-with-Cinema: AI Storyboard & Script Generator — Turn story ideas into screenplays, character profiles, and sound design plans." />
+
+  <link rel="stylesheet" href="/static/style.css" />
+  <script src="/static/script.js" defer></script>
+</head>
+
+<body>
+  <noscript>
+    <div class="noscript">
+      This app requires JavaScript enabled to run.
+    </div>
+  </noscript>
+
+  <div id="app" class="app">
+    <!-- Landing Page -->
+    <section id="landingView" class="view view--active" aria-label="Landing">
+      <div class="hero">
+        <div class="hero__content">
+          <p class="hero__kicker">Coffee-with-Cinema</p>
+          <h1 class="hero__title">AI Storyboard &amp; Script Generator</h1>
+          <p class="hero__subtitle">Cinema, Cinema, Cinema</p>
+
+          <div class="hero__actions">
+            <button id="openUsernameModalBtn" class="btn btn--primary" type="button">
+              Let’s Step Into Cinema
+            </button>
+          </div>
+
+          <p class="hero__hint">Craft screenplays, characters, and soundscapes in one flow.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Username Modal -->
+    <div id="modalBackdrop" class="modal-backdrop is-hidden" aria-hidden="true">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" aria-describedby="modalDesc">
+        <div class="modal__glow" aria-hidden="true"></div>
+
+        <div class="modal__header">
+          <h2 id="modalTitle" class="modal__title">Enter your username</h2>
+          <button id="closeUsernameModalBtn" class="icon-btn" type="button" aria-label="Close">
+            <span aria-hidden="true">×</span>
+          </button>
+        </div>
+
+        <p id="modalDesc" class="modal__desc">We’ll personalize your studio dashboard.</p>
+
+        <form id="usernameForm" class="modal__form" autocomplete="off">
+          <label class="field">
+            <span class="field__label">Username</span>
+            <input id="usernameInput" class="field__input" type="text" name="username" placeholder="e.g., meera" maxlength="40" required />
+          </label>
+
+          <div id="usernameError" class="inline-alert is-hidden" role="status" aria-live="polite"></div>
+
+          <button id="continueBtn" class="btn btn--primary btn--block" type="submit" disabled>
+            Continue
+          </button>
+
+          <p class="modal__fineprint">By continuing, you start a new creative session.</p>
+        </form>
+      </div>
+    </div>
+
+    <!-- Dashboard -->
+    <main id="dashboardView" class="view view--hidden" aria-label="Dashboard">
+      <aside class="sidebar" aria-label="Sidebar navigation">
+        <div class="sidebar__brand">
+          <div class="brandmark" aria-hidden="true"></div>
+          <div class="brandtext">
+            <div class="brandtext__name">Coffee-with-Cinema</div>
+            <div class="brandtext__tag">Studio Console</div>
+          </div>
+        </div>
+
+        <nav class="nav" aria-label="Sections">
+          <button class="nav__item is-active" type="button" data-page="story">
+            <span class="nav__dot" aria-hidden="true"></span>
+            <span class="nav__label">Story Line</span>
+          </button>
+
+          <button class="nav__item is-disabled" type="button" data-page="screenplay" disabled>
+            <span class="nav__dot" aria-hidden="true"></span>
+            <span class="nav__label">Screenplay</span>
+          </button>
+
+          <button class="nav__item is-disabled" type="button" data-page="characters" disabled>
+            <span class="nav__dot" aria-hidden="true"></span>
+            <span class="nav__label">Characters</span>
+          </button>
+
+          <button class="nav__item is-disabled" type="button" data-page="sound" disabled>
+            <span class="nav__dot" aria-hidden="true"></span>
+            <span class="nav__label">Sound Design</span>
+          </button>
+        </nav>
+
+        <div class="sidebar__footer">
+          <div class="chip">Dark • Cinematic • Responsive</div>
+        </div>
+      </aside>
+
+      <section class="content" aria-label="Content">
+        <header class="topbar">
+          <h2 id="greeting" class="greeting">Welcome. Let’s create something amazing.</h2>
+          <div class="topbar__right">
+            <div id="globalStatus" class="global-status" role="status" aria-live="polite"></div>
+          </div>
+        </header>
+
+        <section class="pages" aria-label="Pages">
+          <!-- Story Input Page -->
+          <div class="page is-active" data-page="story">
+            <div class="panel">
+              <div class="panel__header">
+                <h3 class="panel__title">Story Line</h3>
+                <p class="panel__subtitle">Describe your film idea. Be vivid. Be specific.</p>
+              </div>
+
+              <div class="panel__body">
+                <label class="field field--textarea">
+                  <span class="field__label">Your story idea</span>
+                  <textarea id="storyInput" class="field__textarea" rows="12" placeholder="A lonely projectionist discovers that every reel he plays changes reality..." aria-label="Story idea"></textarea>
+                </label>
+
+                <div class="actions">
+                  <button id="generateBtn" class="btn btn--primary" type="button">
+                    Generate Content
+                  </button>
+
+                  <div id="generateSpinner" class="spinner is-hidden" aria-hidden="true"></div>
+                </div>
+
+                <div id="storyError" class="inline-alert is-hidden" role="status" aria-live="polite"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Screenplay Page -->
+          <div class="page" data-page="screenplay">
+            <div class="panel">
+              <div class="panel__header">
+                <h3 class="panel__title">Screenplay</h3>
+                <p class="panel__subtitle">Industry-style formatting preserved.</p>
+              </div>
+
+              <div class="panel__body">
+                <div class="toolbar">
+                  <div class="toolbar__group">
+                    <button class="btn btn--ghost" type="button" data-download="txt">Download TXT</button>
+                    <button class="btn btn--ghost" type="button" data-download="pdf">Download PDF</button>
+                    <button class="btn btn--ghost" type="button" data-download="docx">Download DOCX</button>
+                  </div>
+
+                  <div id="downloadStatus" class="toolbar__status" role="status" aria-live="polite"></div>
+                </div>
+
+                <div class="formatted" aria-label="Screenplay output">
+                  <pre id="screenplayOutput" class="formatted__pre"></pre>
+                </div>
+
+                <div id="screenplayError" class="inline-alert is-hidden" role="status" aria-live="polite"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Character Profiles Page -->
+          <div class="page" data-page="characters">
+            <div class="panel">
+              <div class="panel__header">
+                <h3 class="panel__title">Character Profiles</h3>
+                <p class="panel__subtitle">Clear, readable profiles — separated visually.</p>
+              </div>
+
+              <div class="panel__body">
+                <div id="charactersOutput" class="cards" aria-label="Character profiles"></div>
+                <div id="charactersError" class="inline-alert is-hidden" role="status" aria-live="polite"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sound Design Page -->
+          <div class="page" data-page="sound">
+            <div class="panel">
+              <div class="panel__header">
+                <h3 class="panel__title">Sound Design Plan</h3>
+                <p class="panel__subtitle">Scene-wise plan with bold section headings.</p>
+              </div>
+
+              <div class="panel__body">
+                <div id="soundOutput" class="sound" aria-label="Sound design plan"></div>
+                <div id="soundError" class="inline-alert is-hidden" role="status" aria-live="polite"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
