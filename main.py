@@ -46,6 +46,15 @@ def create_app() -> Flask:
     debug_flag = os.getenv("FLASK_DEBUG", "").strip().lower() in {"1", "true", "yes", "on"}
     app.config["DEBUG"] = debug_flag
 
+    gemini_keys = os.getenv("GEMINI_API_KEYS", "").strip() or os.getenv("GEMINI_API_KEY", "").strip()
+    if not gemini_keys:
+        if debug_flag:
+            app.logger.warning(
+                "GEMINI_API_KEYS or GEMINI_API_KEY is not set; AI generation will fail until it is provided."
+            )
+        else:
+            raise RuntimeError("Missing GEMINI_API_KEYS or GEMINI_API_KEY environment variable.")
+
     secret = os.getenv("FLASK_SECRET_KEY", "").strip()
     if not secret:
         if debug_flag:
@@ -286,6 +295,10 @@ def register_routes(app: Flask) -> None:
         story_raw = data.get("story") or data.get("story_idea") or data.get("prompt")
         story = str(story_raw).strip() if story_raw is not None else ""
 
+        language_raw = data.get("language") or data.get("lang") or ""
+        language = str(language_raw).replace("\r", " ").replace("\n", " ").strip() or "en"
+        language = language[:32]  # defensive clamp to keep prompts tidy
+
         if story:
             try:
                 from ai_engine import AIEngineError, run_full_pipeline, run_full_pipeline_single_call  # local module
@@ -325,12 +338,14 @@ def register_routes(app: Flask) -> None:
                         story,
                         temperature=temperature,
                         min_story_chars=min_story_chars,
+                        language=language,
                     )
                 else:
                     result = run_full_pipeline(
                         story,
                         temperature=temperature,
                         min_story_chars=min_story_chars,
+                        language=language,
                     )
             except AIEngineError as exc:
                 msg = str(exc)
@@ -347,6 +362,7 @@ def register_routes(app: Flask) -> None:
             session["sound_design"] = result.get("sound_design") or ""
             session["genre_analysis"] = result.get("genre_analysis") or {}
             session["ai_meta"] = result.get("meta") or {}
+            session["language"] = language
 
             return jsonify(result)
 

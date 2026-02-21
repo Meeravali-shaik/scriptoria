@@ -19,17 +19,23 @@ def main() -> None:
     ai_engine.validate_story_input(story, min_chars=20)
     print("VALIDATED_OK")
 
-    client = ai_engine.OllamaClient()
-    print("CLIENT_OK", "base_url=", getattr(client, "base_url", None), "model=", getattr(client, "model", None))
+    if not ai_engine.os.getenv("GEMINI_API_KEY", "").strip():
+        print("GEN_SKIP: GEMINI_API_KEY not set")
+        return
+
+    client = ai_engine.GeminiClient()
+    print("CLIENT_OK", "model=", getattr(client, "model", None))
 
     try:
         out = client.generate_text(
-            prompt="Reply with exactly: OK",
+            prompt="Reply with exactly: PING",
             temperature=0.0,
             max_output_tokens=16,
             retries=0,
         )
         print("GEN_OK:", out)
+        if "PING" not in out.upper():
+            print("GEN_WARN: unexpected response")
     except Exception as exc:
         print("GEN_FAIL:", str(exc))
 
